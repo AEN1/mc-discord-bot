@@ -1,46 +1,59 @@
-require('dotenv').config();
-const { Client, GatewayIntentBits } = require('discord.js');
-const mineflayer = require('mineflayer');
+const { Client, GatewayIntentBits } = require("discord.js");
+const express = require("express");
+const axios = require("axios");
+
+// =================== AYARLAR ===================
+const LOG_CHANNEL_ID = "1474866248507461887"; 
+// ===============================================
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get("/", (req, res) => res.send("Bot aktif!"));
+app.listen(PORT, () => console.log("Web server çalışıyor:", PORT));
 
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
+  intents: [GatewayIntentBits.Guilds]
 });
 
-let mcBot = null;
+// =================== BOT READY ===================
+client.once("ready", () => {
+  console.log(`Bot aktif: ${client.user.tag}`);
 
-client.once('ready', () => {
-  console.log(`Discord bot aktif: ${client.user.tag}`);
-});
-
-client.on('messageCreate', (message) => {
-  if (message.content === '!baglan') {
-
-    if (mcBot) {
-      message.reply("Minecraft bot zaten bağlı!");
-      return;
+  // Aternos ping (5 dakikada bir)
+  setInterval(async () => {
+    try {
+      await axios.get("https://aternos.org/go/");
+      console.log("Aternos ping atıldı.");
+    } catch (err) {
+      console.log("Ping hatası:", err.message);
     }
+  }, 300000);
+});
 
-    mcBot = mineflayer.createBot({
-      host: process.env.MC_HOST,
-      port: parseInt(process.env.MC_PORT),
-      username: process.env.MC_USERNAME,
-      auth: "offline",
-      version: false
-    });
+// =================== HATA YAKALAMA ===================
 
-    mcBot.on('spawn', () => {
-      message.reply("Minecraft sunucuya bağlandım!");
-    });
+process.on("unhandledRejection", async (reason) => {
+  console.log("🔥 Unhandled Rejection:", reason);
 
-    mcBot.on('error', (err) => {
-      console.log(err);
-      message.reply("Bağlanırken hata oluştu!");
-    });
+  const channel = client.channels.cache.get(LOG_CHANNEL_ID);
+  if (channel) {
+    channel.send(`🔥 **Unhandled Rejection:**\n\`\`\`${reason}\`\`\``);
   }
 });
 
-client.login(process.env.DISCORD_TOKEN);
+process.on("uncaughtException", async (err) => {
+  console.log("💥 Uncaught Exception:", err);
+
+  const channel = client.channels.cache.get(LOG_CHANNEL_ID);
+  if (channel) {
+    channel.send(`💥 **Uncaught Exception:**\n\`\`\`${err}\`\`\``);
+  }
+});
+
+process.on("warning", (warning) => {
+  console.log("⚠️ Warning:", warning.name, warning.message);
+});
+
+// =================== LOGIN ===================
+client.login(process.env.TOKEN);
